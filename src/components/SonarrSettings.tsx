@@ -13,6 +13,13 @@ export default function SonarrSettings() {
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
 
+  const [options, setOptions] = useState<{
+    qualityProfiles: { id: number; name: string }[],
+    languageProfiles: { id: number; name: string }[],
+    rootFolders: { id: number; path: string }[]
+  } | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+
   useEffect(() => {
     fetch("/api/settings")
       .then(r => r.json())
@@ -61,6 +68,35 @@ export default function SonarrSettings() {
     }
   }
 
+  async function handleFetchOptions() {
+    if (!url || !apiKey) {
+      setStatus("Error: URL and API Key are required to fetch options.");
+      return;
+    }
+    setOptionsLoading(true);
+    setStatus("");
+    try {
+      const res = await fetch("/api/sonarr/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, apiKey })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      setOptions(data);
+      if (!qualityProfileId && data.qualityProfiles.length) setQualityProfileId(data.qualityProfiles[0].id.toString());
+      if (!languageProfileId && data.languageProfiles.length) setLanguageProfileId(data.languageProfiles[0].id.toString());
+      if (!rootFolderPath && data.rootFolders.length) setRootFolderPath(data.rootFolders[0].path);
+      
+      setStatus("Successfully loaded Sonarr profiles.");
+    } catch (err: any) {
+      setStatus(`Error fetching options: ${err.message}`);
+    } finally {
+      setOptionsLoading(false);
+    }
+  }
+
   return (
     <section className="card" style={{ marginBottom: 24 }}>
       <h2 className="section-title" style={{ marginBottom: 12 }}>
@@ -68,7 +104,8 @@ export default function SonarrSettings() {
         Sonarr Configuration
       </h2>
       <p style={{ color: "var(--text-secondary)", marginBottom: 16, fontSize: "0.9rem" }}>
-        Connect your Sonarr instance to automatically filter out shows you already track and easily add new recommendations. Note: Quality/Language profile IDs and Root folder paths must be retrieved from your Sonarr settings.
+        Connect your Sonarr instance to automatically filter out shows you already track and easily add new recommendations. 
+        Enter your URL and API Key, then click "Fetch Profiles" to select your defaults.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 500 }}>
@@ -81,24 +118,45 @@ export default function SonarrSettings() {
           <input type="password" className="search-input" value={apiKey} onChange={e => setApiKey(e.target.value)} style={{ width: "100%" }} />
         </div>
         <div>
-           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Quality Profile ID (Numeric)</label>
-           <input type="number" className="search-input" value={qualityProfileId} onChange={e => setQualityProfileId(e.target.value)} style={{ width: "100%" }} />
+           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Quality Profile</label>
+           {options ? (
+             <select className="search-input" value={qualityProfileId} onChange={e => setQualityProfileId(e.target.value)} style={{ width: "100%" }}>
+               <option value="">Select a Profile...</option>
+               {options.qualityProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+             </select>
+           ) : (
+             <input type="number" className="search-input" value={qualityProfileId} onChange={e => setQualityProfileId(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter ID manually" />
+           )}
         </div>
         <div>
-           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Language Profile ID (Numeric)</label>
-           <input type="number" className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }} />
+           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Language Profile</label>
+           {options ? (
+             <select className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }}>
+               <option value="">Select a Profile...</option>
+               {options.languageProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+             </select>
+           ) : (
+             <input type="number" className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter ID manually" />
+           )}
         </div>
         <div>
-           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Root Folder Path (e.g. /tv/)</label>
-           <input type="text" className="search-input" value={rootFolderPath} onChange={e => setRootFolderPath(e.target.value)} style={{ width: "100%" }} />
+           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Root Folder Path</label>
+           {options ? (
+             <select className="search-input" value={rootFolderPath} onChange={e => setRootFolderPath(e.target.value)} style={{ width: "100%" }}>
+               <option value="">Select a Root Folder...</option>
+               {options.rootFolders.map(f => <option key={f.id} value={f.path}>{f.path}</option>)}
+             </select>
+           ) : (
+             <input type="text" className="search-input" value={rootFolderPath} onChange={e => setRootFolderPath(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter path manually" />
+           )}
         </div>
         
         <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button className="btn btn-secondary" onClick={handleFetchOptions} disabled={optionsLoading || !url || !apiKey}>
+            {optionsLoading ? "Fetching..." : "Fetch Profiles"}
+          </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
             {loading ? "Saving..." : "Save Settings"}
-          </button>
-          <button className="btn btn-secondary" onClick={handleSync}>
-            Sync Shows
           </button>
         </div>
 
