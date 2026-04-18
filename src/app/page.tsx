@@ -29,8 +29,7 @@ function getSentimentClass(score: number): string {
 }
 
 export default function DashboardPage() {
-  const [trending, setTrending] = useState<Show[]>([]);
-  const [discussed, setDiscussed] = useState<Show[]>([]);
+  const [topShows, setTopShows] = useState<Show[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [latestWeek, setLatestWeek] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -45,13 +44,17 @@ export default function DashboardPage() {
 
         if (data.latestWeek) {
           const [trendRes, discRes] = await Promise.all([
-            fetch(`/api/shows?view=trending&week=${data.latestWeek}&limit=10`),
-            fetch(`/api/shows?view=discussed&week=${data.latestWeek}&limit=10`),
+            fetch(`/api/shows?view=trending&week=${data.latestWeek}&limit=12`),
+            fetch(`/api/shows?view=discussed&week=${data.latestWeek}&limit=12`),
           ]);
           const trendData = await trendRes.json();
           const discData = await discRes.json();
-          setTrending(trendData.shows || []);
-          setDiscussed(discData.shows || []);
+
+          const combined = [...(trendData.shows || []), ...(discData.shows || [])];
+          const unique = Array.from(new Map(combined.map(s => [s.id, s])).values());
+          unique.sort((a, b) => (b.mention_count * b.avg_sentiment) - (a.mention_count * a.avg_sentiment));
+          
+          setTopShows(unique.slice(0, 16));
         }
       } catch (err) {
         console.error("Failed to load dashboard:", err);
@@ -107,41 +110,22 @@ export default function DashboardPage() {
 
       {hasData && (
         <>
-          {/* Trending This Week */}
+          {/* Top Shows This Week */}
           <section style={{ marginBottom: 40 }}>
             <div className="section-header">
               <h2 className="section-title">
                 <span className="section-icon">🔥</span>
-                Trending This Week
+                Top Shows This Week
               </h2>
               <Link href="/shows?sort=score" style={{ fontSize: "0.85rem" }}>View all →</Link>
             </div>
             <div className="show-grid">
-              {trending.map((show) => (
+              {topShows.map((show) => (
                 <ShowCard key={show.id} show={show} />
               ))}
             </div>
-            {trending.length === 0 && (
-              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>No trending shows for this week yet.</p>
-            )}
-          </section>
-
-          {/* Most Discussed */}
-          <section>
-            <div className="section-header">
-              <h2 className="section-title">
-                <span className="section-icon">💬</span>
-                Most Discussed
-              </h2>
-              <Link href="/shows?sort=mentions" style={{ fontSize: "0.85rem" }}>View all →</Link>
-            </div>
-            <div className="show-grid">
-              {discussed.map((show) => (
-                <ShowCard key={show.id} show={show} />
-              ))}
-            </div>
-            {discussed.length === 0 && (
-              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>No discussed shows for this week yet.</p>
+            {topShows.length === 0 && (
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>No shows for this week yet.</p>
             )}
           </section>
         </>
