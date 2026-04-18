@@ -1,3 +1,5 @@
+import { getDb, getSetting, syncSonarrLibrary } from "./db";
+
 export interface SonarrProfile {
   id: number;
   name: string;
@@ -80,6 +82,29 @@ export async function addSeries(
     throw new Error(`Failed to add series: ${errorBody}`);
   }
   return addRes.json();
+}
+
+export async function executeSonarrSync() {
+  const url = getSetting("sonarr_url");
+  const apiKey = getSetting("sonarr_api_key");
+  if (!url || !apiKey) return { count: 0, error: "Sonarr not configured" };
+
+  const series = await getAllSeries(url, apiKey);
+  const existingTvdbIds = series.map((s: any) => s.tvdbId).filter(Boolean);
+
+  const libraryCache = series.map((s: any) => ({ tvdb_id: s.tvdbId, title: s.title })).filter((s:any) => s.tvdb_id);
+  syncSonarrLibrary(libraryCache);
+
+  const db = getDb();
+  const stmt = db.prepare("UPDATE shows SET in_sonarr = 1 WHERE tvdb_id = ?");
+  const tx = db.transaction(() => {
+    for (const id of existingTvdbIds) {
+      stmt.run(id);
+    }
+  });
+  tx();
+
+  return { count: existingTvdbIds.length };
 }
 
 /**

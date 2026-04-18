@@ -7,6 +7,7 @@ import { findWeeklyThreads, fetchTopLevelComments, extractWeekDate } from "./red
 import { extractShows } from "./show-matcher";
 import { analyzeSentiment } from "./sentiment";
 import { clearCache } from "./tvdb";
+import { executeSonarrSync } from "./sonarr";
 import {
   getThread,
   insertThread,
@@ -109,6 +110,13 @@ async function scrapeThread(
       errors: ["Failed to insert thread record"],
       skipped: false,
     };
+  }
+
+  // Auto-sync Sonarr first so our cache is perfectly up to date before processing new candidates
+  try {
+    await executeSonarrSync();
+  } catch (err) {
+    console.error("Failed to sync sonarr before scraping:", err);
   }
 
   // Clear TVDB cache for fresh lookups
