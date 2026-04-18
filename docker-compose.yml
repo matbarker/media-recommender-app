@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: media-recommender
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./.env.local:/app/.env.local
+    environment:
+      - PORT=3000
+    restart: unless-stopped
