@@ -17,6 +17,8 @@ interface Show {
   first_seen: string;
   last_seen: string;
   total_mentions: number;
+  hidden: number;
+  in_sonarr: number;
 }
 
 interface Mention {
@@ -56,6 +58,32 @@ export default function ShowDetailPage() {
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [weeklySentiment, setWeeklySentiment] = useState<WeeklySentiment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  async function handleToggleHide() {
+    if (!show) return;
+    setActionLoading(true);
+    try {
+      const endpoint = show.hidden ? "unhide" : "hide";
+      await fetch(`/api/shows/${show.id}/${endpoint}`, { method: "POST" });
+      setShow({ ...show, hidden: show.hidden ? 0 : 1 });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleAddToSonarr() {
+    if (!show) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/shows/${show.id}/sonarr`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) alert(data.error);
+      else setShow({ ...show, in_sonarr: 1 });
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -140,11 +168,29 @@ export default function ShowDetailPage() {
               href={`https://thetvdb.com/series/${show.tvdb_slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ display: "inline-block", marginTop: 16, fontSize: "0.85rem" }}
+              style={{ display: "inline-block", marginTop: 16, fontSize: "0.85rem", marginRight: 16 }}
             >
               View on TheTVDB →
             </a>
           )}
+
+          {/* Action Buttons */}
+          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleToggleHide}
+              disabled={actionLoading}
+            >
+              {show.hidden ? "👁️ Unhide Show" : "🙈 Hide Show"}
+            </button>
+            <button 
+              className="btn btn-primary"
+              onClick={handleAddToSonarr}
+              disabled={actionLoading || !!show.in_sonarr}
+            >
+              {show.in_sonarr ? "✅ In Sonarr" : "➕ Add to Sonarr"}
+            </button>
+          </div>
         </div>
       </div>
 

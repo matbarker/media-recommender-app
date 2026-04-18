@@ -65,7 +65,34 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_mentions_show ON mentions(show_id);
     CREATE INDEX IF NOT EXISTS idx_mentions_thread ON mentions(thread_id);
     CREATE INDEX IF NOT EXISTS idx_shows_name ON shows(name);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
+
+  const columns = db.pragma("table_info(shows)") as { name: string }[];
+  if (!columns.find(c => c.name === "hidden")) {
+    db.exec("ALTER TABLE shows ADD COLUMN hidden INTEGER DEFAULT 0");
+  }
+  if (!columns.find(c => c.name === "in_sonarr")) {
+    db.exec("ALTER TABLE shows ADD COLUMN in_sonarr INTEGER DEFAULT 0");
+  }
+}
+
+// ── Settings helpers ──
+
+export function getSetting(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value || null;
+}
+
+export function setSetting(key: string, value: string) {
+  getDb().prepare(`
+    INSERT INTO settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, value);
 }
 
 // ── Thread helpers ──
@@ -110,12 +137,29 @@ export function incrementShowMentions(id: number) {
   getDb().prepare("UPDATE shows SET total_mentions = total_mentions + 1 WHERE id = ?").run(id);
 }
 
-export function getAllShows(sort: string = "score", limit: number = 100, offset: number = 0) {
+export function hideShow(id: number) {
+  getDb().prepare("UPDATE shows SET hidden = 1 WHERE id = ?").run(id);
+}
+
+export function unhideShow(id: number) {
+  getDb().prepare("UPDATE shows SET hidden = 0 WHERE id = ?").run(id);
+}
+
+export function markShowInSonarr(id: number, inSonarr: boolean = true) {
+  getDb().prepare("UPDATE shows SET in_sonarr = ? WHERE id = ?").run(inSonarr ? 1 : 0, id);
+}
+
+export function getAllShows(sort: string = "score", limit: number = 100, offset: number = 0, includeHidden: boolean = false) {
   let orderBy = "s.total_mentions DESC";
   if (sort === "score") orderBy = "avg_sentiment DESC";
   else if (sort === "name") orderBy = "s.name ASC";
   else if (sort === "recent") orderBy = "s.last_seen DESC";
   else if (sort === "mentions") orderBy = "s.total_mentions DESC";
+
+  let where = "WHERE s.hidden = 0 AND s.in_sonarr = 0";
+  if (includeHidden) {
+    where = "WHERE s.hidden = 1";
+  }
 
   return getDb().prepare(`
     SELECT s.*,
@@ -123,6 +167,7 @@ export function getAllShows(sort: string = "score", limit: number = 100, offset:
       COUNT(m.id) as mention_count
     FROM shows s
     LEFT JOIN mentions m ON m.show_id = s.id
+    ${where}
     GROUP BY s.id
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
@@ -231,6 +276,8 @@ export interface ShowRow {
   first_seen: string;
   last_seen: string;
   total_mentions: number;
+  hidden: number;
+  in_sonarr: number;
 }
 
 export interface MentionRow {

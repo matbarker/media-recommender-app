@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SonarrSettings from "@/components/SonarrSettings";
 
 interface ScrapeResult {
   threadTitle: string;
@@ -177,6 +178,8 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+
+      <SonarrSettings />
 
       {/* Info */}
       <section className="card-glass" style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>

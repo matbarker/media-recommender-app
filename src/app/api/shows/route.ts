@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ shows });
     }
 
-    const shows = getAllShows(sort, limit, offset);
+    const includeHidden = searchParams.get("includeHidden") === "true";
+    const shows = getAllShows(sort, limit, offset, includeHidden);
     const total = getShowsCount();
     const latestWeek = getLatestWeek();
     const stats = getStats();

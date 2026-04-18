@@ -24,6 +24,7 @@ export default function RootLayout({
               <ul className="nav-links">
                 <li><a href="/">Dashboard</a></li>
                 <li><a href="/shows">All Shows</a></li>
+                <li><a href="/shows/hidden">Ignored Shows</a></li>
                 <li><a href="/admin">Admin</a></li>
               </ul>
             </nav>
