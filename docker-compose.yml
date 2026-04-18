@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: media-recommender
     ports:
-      - "3000:3000"
+      - "3002:3000"
     volumes:
       - ./data:/app/data
       - ./.env.local:/app/.env.local
