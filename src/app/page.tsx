@@ -65,6 +65,16 @@ export default function DashboardPage() {
     load();
   }, []);
 
+  async function handleHide(id: number) {
+    setTopShows(topShows.filter(s => s.id !== id));
+    if (stats) setStats({ ...stats, totalShows: stats.totalShows - 1 });
+    try {
+      await fetch(`/api/shows/${id}/hide`, { method: "POST" });
+    } catch {
+      // Ignore network fail for optimistic UI
+    }
+  }
+
   if (loading) {
     return (
       <div className="empty-state">
@@ -121,7 +131,7 @@ export default function DashboardPage() {
             </div>
             <div className="show-grid">
               {topShows.map((show) => (
-                <ShowCard key={show.id} show={show} />
+                <ShowCard key={show.id} show={show} onHide={handleHide} />
               ))}
             </div>
             {topShows.length === 0 && (
@@ -134,33 +144,60 @@ export default function DashboardPage() {
   );
 }
 
-function ShowCard({ show }: { show: Show }) {
+function ShowCard({ show, onHide }: { show: Show, onHide?: (id: number) => void }) {
   const score = Math.round(show.avg_sentiment * 10) / 10;
   return (
-    <Link href={`/shows/${show.id}`} className="card show-card">
-      {show.tvdb_image_url ? (
-        <img
-          src={show.tvdb_image_url}
-          alt={show.name}
-          className="show-poster"
-          loading="lazy"
-        />
-      ) : (
-        <div className="show-poster-placeholder">📺</div>
+    <div className="card show-card" style={{ position: "relative", padding: 0, overflow: "hidden" }}>
+      {onHide && (
+         <button 
+           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onHide(show.id); }}
+           style={{ 
+             position: 'absolute', 
+             top: 8, right: 8, 
+             zIndex: 10, 
+             background: 'var(--bg-card)', 
+             border: '1px solid var(--border)', 
+             borderRadius: '50%', 
+             width: 32, 
+             height: 32, 
+             cursor: 'pointer',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             fontSize: '1rem',
+             boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+           }}
+           title="Hide Show"
+           className="hover-scale"
+         >
+           🙈
+         </button>
       )}
-      <div className="show-info">
-        <div className="show-name">{show.name}</div>
-        <div className="show-meta">
-          {show.tvdb_year && <span>{show.tvdb_year}</span>}
-          {show.tvdb_network && <span> · {show.tvdb_network}</span>}
+      <Link href={`/shows/${show.id}`} style={{ display: 'block', height: '100%' }}>
+        {show.tvdb_image_url ? (
+          <img
+            src={show.tvdb_image_url}
+            alt={show.name}
+            className="show-poster"
+            loading="lazy"
+          />
+        ) : (
+          <div className="show-poster-placeholder">📺</div>
+        )}
+        <div className="show-info" style={{ padding: "16px" }}>
+          <div className="show-name">{show.name}</div>
+          <div className="show-meta">
+            {show.tvdb_year && <span>{show.tvdb_year}</span>}
+            {show.tvdb_network && <span> · {show.tvdb_network}</span>}
+          </div>
+          <div className="show-stats">
+            <span className={`sentiment-badge ${getSentimentClass(score)}`}>
+              {score.toFixed(1)}
+            </span>
+            <span className="mention-count">{show.mention_count} mention{show.mention_count !== 1 ? "s" : ""}</span>
+          </div>
         </div>
-        <div className="show-stats">
-          <span className={`sentiment-badge ${getSentimentClass(score)}`}>
-            {score.toFixed(1)}
-          </span>
-          <span className="mention-count">{show.mention_count} mention{show.mention_count !== 1 ? "s" : ""}</span>
-        </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
