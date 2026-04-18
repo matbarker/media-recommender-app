@@ -14,11 +14,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const url = getSetting("sonarr_url");
     const apiKey = getSetting("sonarr_api_key");
     const qualityProfileId = getSetting("sonarr_quality_profile");
-    const languageProfileId = getSetting("sonarr_language_profile");
+    const languageProfileId = getSetting("sonarr_language_profile") || "1";
     const rootFolderPath = getSetting("sonarr_root_folder");
 
-    if (!url || !apiKey || !qualityProfileId || !languageProfileId || !rootFolderPath) {
-      return NextResponse.json({ error: "Sonarr is not fully configured" }, { status: 400 });
+    if (!url || !apiKey || !qualityProfileId || !rootFolderPath) {
+      return NextResponse.json({ error: "Sonarr is not fully configured (missing URL, Key, Quality Profile, or Root Folder)" }, { status: 400 });
     }
 
     await addSeries(

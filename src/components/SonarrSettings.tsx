@@ -86,8 +86,16 @@ export default function SonarrSettings() {
       
       setOptions(data);
       if (!qualityProfileId && data.qualityProfiles.length) setQualityProfileId(data.qualityProfiles[0].id.toString());
-      if (!languageProfileId && data.languageProfiles.length) setLanguageProfileId(data.languageProfiles[0].id.toString());
       if (!rootFolderPath && data.rootFolders.length) setRootFolderPath(data.rootFolders[0].path);
+      
+      // Handle Sonarr v4 Deprecated Language Profiles
+      const isLanguageDeprecated = data.languageProfiles.some((p: any) => p.name.toLowerCase() === "deprecated");
+      if (isLanguageDeprecated) {
+         const depProfile = data.languageProfiles.find((p: any) => p.name.toLowerCase() === "deprecated");
+         if (depProfile) setLanguageProfileId(depProfile.id.toString());
+      } else if (!languageProfileId && data.languageProfiles.length) {
+         setLanguageProfileId(data.languageProfiles[0].id.toString());
+      }
       
       setStatus("Successfully loaded Sonarr profiles.");
     } catch (err: any) {
@@ -128,17 +136,21 @@ export default function SonarrSettings() {
              <input type="number" className="search-input" value={qualityProfileId} onChange={e => setQualityProfileId(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter ID manually" />
            )}
         </div>
-        <div>
-           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Language Profile</label>
-           {options ? (
-             <select className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }}>
-               <option value="">Select a Profile...</option>
-               {options.languageProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-             </select>
-           ) : (
-             <input type="number" className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter ID manually" />
-           )}
-        </div>
+        
+        {(!options || !options.languageProfiles.some(p => p.name.toLowerCase() === "deprecated")) && (
+          <div>
+             <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Language Profile</label>
+             {options ? (
+               <select className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }}>
+                 <option value="">Select a Profile...</option>
+                 {options.languageProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+               </select>
+             ) : (
+               <input type="number" className="search-input" value={languageProfileId} onChange={e => setLanguageProfileId(e.target.value)} style={{ width: "100%" }} placeholder="Click 'Fetch Profiles' or enter ID manually" />
+             )}
+          </div>
+        )}
+
         <div>
            <label style={{ display: "block", fontSize: "0.85rem", marginBottom: 4 }}>Root Folder Path</label>
            {options ? (
