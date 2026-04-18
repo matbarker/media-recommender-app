@@ -66,6 +66,11 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_mentions_thread ON mentions(thread_id);
     CREATE INDEX IF NOT EXISTS idx_shows_name ON shows(name);
 
+    CREATE TABLE IF NOT EXISTS sonarr_library (
+      tvdb_id INTEGER PRIMARY KEY,
+      title TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -93,6 +98,25 @@ export function setSetting(key: string, value: string) {
     INSERT INTO settings (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run(key, value);
+}
+
+// ── Sonarr Library helpers ──
+
+export function syncSonarrLibrary(library: {tvdb_id: number, title: string}[]) {
+  const db = getDb();
+  db.prepare("DELETE FROM sonarr_library").run();
+  const stmt = db.prepare("INSERT OR IGNORE INTO sonarr_library (tvdb_id, title) VALUES (?, ?)");
+  const tx = db.transaction(() => {
+    for (const show of library) {
+      if (show.tvdb_id) stmt.run(show.tvdb_id, show.title);
+    }
+  });
+  tx();
+}
+
+export function checkInSonarrLibrary(tvdbId: number): boolean {
+  const row = getDb().prepare("SELECT 1 FROM sonarr_library WHERE tvdb_id = ?").get(tvdbId);
+  return !!row;
 }
 
 // ── Thread helpers ──
@@ -123,9 +147,14 @@ export function getShowById(id: number) {
 }
 
 export function insertShow(show: Omit<ShowRow, "id">) {
+  let inSonarr = show.in_sonarr || 0;
+  if (!inSonarr && show.tvdb_id && checkInSonarrLibrary(show.tvdb_id)) {
+    inSonarr = 1;
+  }
+
   return getDb().prepare(`
-    INSERT OR IGNORE INTO shows (name, tvdb_id, tvdb_slug, tvdb_image_url, tvdb_year, tvdb_network, tvdb_status, tvdb_overview, first_seen, last_seen, total_mentions)
-    VALUES (@name, @tvdb_id, @tvdb_slug, @tvdb_image_url, @tvdb_year, @tvdb_network, @tvdb_status, @tvdb_overview, @first_seen, @last_seen, @total_mentions)
+    INSERT OR IGNORE INTO shows (name, tvdb_id, tvdb_slug, tvdb_image_url, tvdb_year, tvdb_network, tvdb_status, tvdb_overview, first_seen, last_seen, total_mentions, in_sonarr)
+    VALUES (@name, @tvdb_id, @tvdb_slug, @tvdb_image_url, @tvdb_year, @tvdb_network, @tvdb_status, @tvdb_overview, @first_seen, @last_seen, @total_mentions, ${inSonarr})
   `).run(show);
 }
 
@@ -215,7 +244,7 @@ export function getTopShowsForWeek(weekOf: string, limit: number = 10) {
     FROM mentions m
     JOIN shows s ON s.id = m.show_id
     JOIN threads t ON t.id = m.thread_id
-    WHERE t.week_of = ?
+    WHERE t.week_of = ? AND s.hidden = 0 AND s.in_sonarr = 0
     GROUP BY s.id
     ORDER BY avg_sentiment DESC
     LIMIT ?
@@ -228,7 +257,7 @@ export function getMostDiscussedForWeek(weekOf: string, limit: number = 10) {
     FROM mentions m
     JOIN shows s ON s.id = m.show_id
     JOIN threads t ON t.id = m.thread_id
-    WHERE t.week_of = ?
+    WHERE t.week_of = ? AND s.hidden = 0 AND s.in_sonarr = 0
     GROUP BY s.id
     ORDER BY mention_count DESC
     LIMIT ?

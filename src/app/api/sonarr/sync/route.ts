@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSetting, getDb } from "@/lib/db";
+import { getSetting, getDb, syncSonarrLibrary } from "@/lib/db";
 import { getAllSeries } from "@/lib/sonarr";
 
 export async function POST() {
@@ -14,6 +14,10 @@ export async function POST() {
     // Mark shows in our DB
     const db = getDb();
     
+    // Sync the separate cache table
+    const libraryCache = series.map((s: any) => ({ tvdb_id: s.tvdbId, title: s.title })).filter((s:any) => s.tvdb_id);
+    syncSonarrLibrary(libraryCache);
+
     const stmt = db.prepare("UPDATE shows SET in_sonarr = 1 WHERE tvdb_id = ?");
     const tx = db.transaction(() => {
       for (const id of existingTvdbIds) {

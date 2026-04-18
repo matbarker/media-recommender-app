@@ -81,3 +81,40 @@ export async function addSeries(
   }
   return addRes.json();
 }
+
+/**
+ * Searches Sonarr for a show by name.
+ * Uses Sonarr's Skyhook lookup which returns TVDB mapped objects.
+ */
+export async function searchShowSonarr(url: string, apiKey: string, name: string) {
+  const query = encodeURIComponent(name);
+  const res = await fetch(`${getBaseUrl(url)}/api/v3/series/lookup?term=${query}&apikey=${apiKey}`);
+  
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Sonarr lookup failed: ${res.status}`);
+  }
+
+  const results = await res.json();
+  if (!results || results.length === 0) return null;
+
+  // Find best match similar to how TVDB does it
+  const cacheKey = name.toLowerCase().trim();
+  const exactMatch = results.find(
+    (r: any) => r.title?.toLowerCase() === cacheKey
+  );
+
+  const best = exactMatch || results[0];
+
+  // Map to our standard TVDBShow interface format
+  return {
+    tvdb_id: best.tvdbId || 0,
+    name: best.title || "",
+    slug: best.titleSlug || "",
+    image_url: best.remotePoster || best.images?.[0]?.url || null,
+    year: best.year ? best.year.toString() : null,
+    network: best.network || null,
+    status: best.status || null,
+    overview: best.overview || null,
+  };
+}

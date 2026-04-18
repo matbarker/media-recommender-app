@@ -5,8 +5,9 @@
  * 2. Heuristic extraction + TheTVDB verification for new shows
  */
 
-import { getDb } from "./db";
-import { searchShow, type TVDBShow } from "./tvdb";
+import { getDb, getSetting } from "./db";
+import { searchShow as searchShowTVDB, type TVDBShow } from "./tvdb";
+import { searchShowSonarr } from "./sonarr";
 
 export interface MatchedShow {
   name: string;
@@ -67,13 +68,32 @@ export async function extractShows(commentBody: string): Promise<MatchedShow[]> 
     }
   }
 
-  // Pass 2: Extract candidates using heuristics, then verify with TVDB
+  // Pass 2: Extract candidates using heuristics, then verify with Sonarr/TVDB
   const candidates = extractCandidates(commentBody);
+  
+  // Pre-fetch settings to avoid querying per candidate
+  const sonarrUrl = getSetting("sonarr_url");
+  const sonarrApiKey = getSetting("sonarr_api_key");
+
   for (const candidate of candidates) {
     const candidateLower = candidate.toLowerCase();
     if (seen.has(candidateLower)) continue;
 
-    const tvdbResult = await searchShow(candidate);
+    let tvdbResult = null;
+    
+    // Fallback Resolver: Try Sonarr first, then TVDB
+    if (sonarrUrl && sonarrApiKey) {
+      try {
+        tvdbResult = await searchShowSonarr(sonarrUrl, sonarrApiKey, candidate);
+      } catch (err) {
+        console.warn(`Sonarr lookup failed for "${candidate}", falling back to TVDB...`, err);
+      }
+    }
+
+    if (!tvdbResult) {
+       tvdbResult = await searchShowTVDB(candidate);
+    }
+
     if (tvdbResult) {
       seen.add(candidateLower);
       matches.push({ name: tvdbResult.name, tvdbData: tvdbResult });
