@@ -20,6 +20,8 @@ export default function AdminPage() {
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillStatus, setBackfillStatus] = useState<string>("");
   const [results, setResults] = useState<ScrapeResult[]>([]);
+  const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
+  const [reanalyzeStatus, setReanalyzeStatus] = useState<string>("");
 
   async function handleScrape() {
     setScrapeLoading(true);
@@ -73,6 +75,31 @@ export default function AdminPage() {
       setBackfillStatus(`Failed: ${err}`);
     } finally {
       setBackfillLoading(false);
+    }
+  }
+
+  async function handleReanalyze() {
+    if (!confirm("This will clear all shows and mentions, then re-analyze every stored comment with the updated matching algorithm. Continue?")) {
+      return;
+    }
+    setReanalyzeLoading(true);
+    setReanalyzeStatus("Re-analyzing all comments... This may take a few minutes.");
+    try {
+      const res = await fetch("/api/reanalyze", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setReanalyzeStatus(`Error: ${data.error}`);
+      } else {
+        const r = data.result;
+        setReanalyzeStatus(
+          `Done! ${r.commentsProcessed} comments re-analyzed, ${r.showsFound} shows found, ${r.mentionsCreated} mentions created.` +
+          (r.errors.length > 0 ? ` (${r.errors.length} errors)` : "")
+        );
+      }
+    } catch (err) {
+      setReanalyzeStatus(`Failed: ${err}`);
+    } finally {
+      setReanalyzeLoading(false);
     }
   }
 
@@ -175,6 +202,37 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Re-analyze */}
+      <section className="card" style={{ marginBottom: 24 }}>
+        <h2 className="section-title" style={{ marginBottom: 12 }}>
+          <span className="section-icon">🔄</span>
+          Re-Analyze Comments
+        </h2>
+        <p style={{ color: "var(--text-secondary)", marginBottom: 16, fontSize: "0.9rem" }}>
+          Clear all shows and mentions, then re-process every stored comment using the current matching algorithm.
+          No new data is downloaded — only existing comments are re-analyzed.
+        </p>
+        <button
+          className="btn btn-secondary"
+          onClick={handleReanalyze}
+          disabled={reanalyzeLoading}
+        >
+          {reanalyzeLoading ? (
+            <>
+              <span className="loading-spinner"></span>
+              Re-analyzing...
+            </>
+          ) : (
+            "Re-Analyze All Comments"
+          )}
+        </button>
+        {reanalyzeStatus && (
+          <div className={`status-message ${reanalyzeLoading ? "status-loading" : reanalyzeStatus.startsWith("Error") || reanalyzeStatus.startsWith("Failed") ? "status-error" : "status-success"}`}>
+            {reanalyzeStatus}
           </div>
         )}
       </section>

@@ -280,6 +280,38 @@ export function getStats() {
   };
 }
 
+// ── Re-analysis helpers ──
+
+export interface StoredComment {
+  comment_reddit_id: string;
+  comment_body: string;
+  thread_id: number;
+  week_of: string;
+  created_at: string;
+}
+
+/**
+ * Get all unique comments stored in the mentions table, grouped with thread info.
+ */
+export function getAllStoredComments(): StoredComment[] {
+  return getDb().prepare(`
+    SELECT DISTINCT m.comment_reddit_id, m.comment_body, m.thread_id, t.week_of, m.created_at
+    FROM mentions m
+    JOIN threads t ON t.id = m.thread_id
+    ORDER BY t.week_of ASC, m.comment_reddit_id ASC
+  `).all() as StoredComment[];
+}
+
+/**
+ * Clear shows and mentions tables while preserving threads.
+ * Used before re-analysis so we can re-process with updated matching.
+ */
+export function clearShowsAndMentions() {
+  const db = getDb();
+  db.exec("DELETE FROM mentions");
+  db.exec("DELETE FROM shows");
+}
+
 // ── Types ──
 
 export interface ThreadRow {
