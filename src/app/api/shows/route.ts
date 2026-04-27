@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllShows, getShowsCount, getTopShowsForWeek, getMostDiscussedForWeek, getLatestWeek, getStats } from "@/lib/db";
+import { getAllShows, getShowsCount, getTopShowsForWeek, getMostDiscussedForWeek, getLatestWeek, getStats, getIgnoredShows } from "@/lib/db";
 import { startScheduler } from "@/lib/scheduler";
 
 // Start the cron scheduler when the API is first loaded
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "100");
     const offset = parseInt(searchParams.get("offset") || "0");
     const week = searchParams.get("week");
-    const view = searchParams.get("view"); // "trending" | "discussed" | "all"
+    const view = searchParams.get("view");
 
     if (view === "trending" && week) {
       const shows = getTopShowsForWeek(week, limit);
@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
 
     if (view === "discussed" && week) {
       const shows = getMostDiscussedForWeek(week, limit);
+      return NextResponse.json({ shows });
+    }
+
+    if (view === "ignored") {
+      const shows = getIgnoredShows(limit);
       return NextResponse.json({ shows });
     }
 

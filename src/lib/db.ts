@@ -203,6 +203,21 @@ export function getAllShows(sort: string = "score", limit: number = 100, offset:
   `).all(limit, offset) as (ShowRow & { avg_sentiment: number; mention_count: number })[];
 }
 
+export function getIgnoredShows(limit: number = 100) {
+  return getDb().prepare(`
+    SELECT s.*,
+      COALESCE(AVG(m.sentiment_score), 5.0) as avg_sentiment,
+      COUNT(m.id) as mention_count
+    FROM shows s
+    LEFT JOIN mentions m ON m.show_id = s.id
+    WHERE s.hidden = 1 OR s.in_sonarr = 1
+    GROUP BY s.id
+    ORDER BY s.name ASC
+    LIMIT ?
+  `).all(limit) as (ShowRow & { avg_sentiment: number; mention_count: number })[];
+}
+
+
 export function getShowsCount() {
   const row = getDb().prepare("SELECT COUNT(*) as count FROM shows").get() as { count: number };
   return row.count;
