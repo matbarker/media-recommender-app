@@ -134,14 +134,16 @@ function getKnownShowNames(): string[] {
 }
 
 /**
- * Extract candidate show names from comment text using heuristics.
+ * Extract candidate show names from comment text.
+ * Only extracts from explicit formatting (bold/italic) to avoid false positives.
+ * In r/television weekly threads, users typically bold show names like **The Americans**.
  */
 function extractCandidates(text: string): string[] {
   const candidates: string[] = [];
   const seen = new Set<string>();
 
   const addCandidate = (name: string) => {
-    const cleaned = name.trim().replace(/[.,!?;:'"()[\]{}]+$/g, "").replace(/^[.,!?;:'"()[\]{}]+/g, "").trim();
+    const cleaned = name.trim().replace(/[.,!?;:'"()\[\]{}]+$/g, "").replace(/^[.,!?;:'"()\[\]{}]+/g, "").trim();
     if (cleaned.length < 2 || cleaned.length > 80) return;
     const lower = cleaned.toLowerCase();
     if (seen.has(lower)) return;
@@ -160,36 +162,6 @@ function extractCandidates(text: string): string[] {
   const italicMatches = text.matchAll(/(?<!\*)\*([^*]+?)\*(?!\*)|(?<!_)_([^_]+?)_(?!_)/g);
   for (const m of italicMatches) {
     addCandidate(m[1] || m[2]);
-  }
-
-  // 3. Quoted text
-  const quoteMatches = text.matchAll(/"([^"]+?)"|"([^"]+?)"|'([^']+?)'/g);
-  for (const m of quoteMatches) {
-    addCandidate(m[1] || m[2] || m[3]);
-  }
-
-  // 4. "Watching X" / "Started X" / "Finished X" / "Binged X" patterns
-  const verbPatterns = text.matchAll(
-    /(?:watching|started|finished|binged|loving|enjoying|recommend|recommending|discovered|checking out|tried|trying)\s+([A-Z][A-Za-z0-9':&\- ]{1,50}?)(?:\s*[-–—.!,;]|\s+and\s|\s+on\s|\s+is\s|\s+was\s|\s+has\s|\s+it\s|\s+which\s|\s+because\s|\s+but\s|\s+though\s|\s+after\s|$)/gi
-  );
-  for (const m of verbPatterns) {
-    if (m[1]) {
-      // Clean trailing common words
-      let name = m[1].replace(/\s+(and|on|is|was|has|it|the|this|that|so|but|because|which|after|before|since|if|or|yet|for|with|really|very|lately|recently|again|too)$/i, "").trim();
-      if (name.length >= 2) {
-        addCandidate(name);
-      }
-    }
-  }
-
-  // 5. Title Case phrases (2+ consecutive capitalized words)
-  const titleCaseMatches = text.matchAll(
-    /\b([A-Z][a-z]+(?:\s+(?:the|of|and|in|on|at|to|for|a|an|is|The|Of|And|In|On|At|To|For|A|An|Is)\s+)?(?:[A-Z][a-z]+)(?:\s+(?:the|of|and|in|on|at|to|for|a|an|The|Of|And|In|On|At|To|For|A|An)\s+[A-Z][a-z]+)*)\b/g
-  );
-  for (const m of titleCaseMatches) {
-    if (m[1] && m[1].split(/\s+/).length >= 2 && m[1].split(/\s+/).length <= MAX_NAME_WORDS) {
-      addCandidate(m[1]);
-    }
   }
 
   return candidates;
