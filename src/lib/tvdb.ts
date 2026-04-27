@@ -20,6 +20,11 @@ let tokenExpiry = 0;
 // In-memory cache to avoid re-querying for shows already looked up
 const searchCache = new Map<string, TVDBShow | null>();
 
+// Networks to exclude from matching (YouTube originals, web series, etc.)
+const EXCLUDED_NETWORKS = new Set([
+  "youtube", "youtube premium", "youtube originals", "youtube red",
+]);
+
 async function authenticate(): Promise<string> {
   if (bearerToken && Date.now() < tokenExpiry) {
     return bearerToken;
@@ -76,9 +81,20 @@ export async function searchShow(name: string): Promise<TVDBShow | null> {
     }
 
     const data = await res.json();
-    const results = data.data as Record<string, unknown>[];
+    const allResults = data.data as Record<string, unknown>[];
 
-    if (!results || results.length === 0) {
+    if (!allResults || allResults.length === 0) {
+      searchCache.set(cacheKey, null);
+      return null;
+    }
+
+    // Filter out YouTube shows
+    const results = allResults.filter((r) => {
+      const network = ((r.network as string) || "").toLowerCase().trim();
+      return !EXCLUDED_NETWORKS.has(network);
+    });
+
+    if (results.length === 0) {
       searchCache.set(cacheKey, null);
       return null;
     }
@@ -108,6 +124,12 @@ export async function searchShow(name: string): Promise<TVDBShow | null> {
       status: (best.status as string) || null,
       overview: truncateOverview((best.overview as string) || ((best.overviews as Record<string, string>)?.eng as string) || null),
     };
+
+    // Final safety check: reject if network resolved to YouTube
+    if (show.network && EXCLUDED_NETWORKS.has(show.network.toLowerCase().trim())) {
+      searchCache.set(cacheKey, null);
+      return null;
+    }
 
     searchCache.set(cacheKey, show);
     return show;

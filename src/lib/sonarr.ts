@@ -107,6 +107,11 @@ export async function executeSonarrSync() {
   return { count: existingTvdbIds.length };
 }
 
+// Networks to exclude from matching
+const EXCLUDED_NETWORKS = new Set([
+  "youtube", "youtube premium", "youtube originals", "youtube red",
+]);
+
 /**
  * Searches Sonarr for a show by name.
  * Uses Sonarr's Skyhook lookup which returns TVDB mapped objects.
@@ -120,8 +125,16 @@ export async function searchShowSonarr(url: string, apiKey: string, name: string
     throw new Error(`Sonarr lookup failed: ${res.status}`);
   }
 
-  const results = await res.json();
-  if (!results || results.length === 0) return null;
+  const allResults = await res.json();
+  if (!allResults || allResults.length === 0) return null;
+
+  // Filter out YouTube shows
+  const results = allResults.filter((r: any) => {
+    const network = (r.network || "").toLowerCase().trim();
+    return !EXCLUDED_NETWORKS.has(network);
+  });
+
+  if (results.length === 0) return null;
 
   // Find best match similar to how TVDB does it
   const cacheKey = name.toLowerCase().trim();
@@ -132,7 +145,7 @@ export async function searchShowSonarr(url: string, apiKey: string, name: string
   const best = exactMatch || results[0];
 
   // Map to our standard TVDBShow interface format
-  return {
+  const show = {
     tvdb_id: best.tvdbId || 0,
     name: best.title || "",
     slug: best.titleSlug || "",
@@ -142,4 +155,11 @@ export async function searchShowSonarr(url: string, apiKey: string, name: string
     status: best.status || null,
     overview: best.overview || null,
   };
+
+  // Final safety check
+  if (show.network && EXCLUDED_NETWORKS.has(show.network.toLowerCase().trim())) {
+    return null;
+  }
+
+  return show;
 }

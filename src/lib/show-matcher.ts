@@ -6,13 +6,16 @@
  */
 
 import { getDb, getSetting } from "./db";
-import { searchShow as searchShowTVDB, type TVDBShow } from "./tvdb";
 import { searchShowSonarr } from "./sonarr";
+import { searchShow as searchShowTVDB, type TVDBShow } from "./tvdb";
 
 export interface MatchedShow {
   name: string;
   tvdbData: TVDBShow | null;
 }
+
+// Global cache for candidates to severely speed up backfills
+const resolutionCache = new Map<string, TVDBShow | null>();
 
 // Common words that should NOT be treated as show names
 const STOP_WORDS = new Set([
@@ -80,24 +83,37 @@ export async function extractShows(commentBody: string): Promise<MatchedShow[]> 
     if (seen.has(candidateLower)) continue;
 
     let tvdbResult = null;
-    
-    // Fallback Resolver: Try Sonarr first, then TVDB
-    if (sonarrUrl && sonarrApiKey) {
-      try {
-        tvdbResult = await searchShowSonarr(sonarrUrl, sonarrApiKey, candidate);
-      } catch (err) {
-        console.warn(`Sonarr lookup failed for "${candidate}", falling back to TVDB...`, err);
-      }
-    }
 
-    if (!tvdbResult) {
-       tvdbResult = await searchShowTVDB(candidate);
+    // Check memory cache first to save network calls
+    if (resolutionCache.has(candidateLower)) {
+      tvdbResult = resolutionCache.get(candidateLower)!;
+    } else {
+      // Fallback Resolver: Try Sonarr first, then TVDB
+      if (sonarrUrl && sonarrApiKey) {
+        try {
+          tvdbResult = await searchShowSonarr(sonarrUrl, sonarrApiKey, candidate);
+        } catch (err) {
+          console.warn(`Sonarr lookup failed for "${candidate}", falling back to TVDB...`, err);
+        }
+      }
+
+      if (!tvdbResult) {
+         tvdbResult = await searchShowTVDB(candidate);
+      }
+      
+      resolutionCache.set(candidateLower, tvdbResult);
     }
 
     if (tvdbResult) {
       seen.add(candidateLower);
       matches.push({ name: tvdbResult.name, tvdbData: tvdbResult });
     }
+  }
+
+  // Cap cache size to prevent unbounded memory growth during huge backfills
+  if (resolutionCache.size > 10000) {
+    const keys = Array.from(resolutionCache.keys());
+    for (let i = 0; i < 5000; i++) resolutionCache.delete(keys[i]);
   }
 
   return matches;
